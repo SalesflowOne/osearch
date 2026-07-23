@@ -1,14 +1,17 @@
+import { createHash } from 'node:crypto';
 import { createServiceSupabase } from '@/lib/oweb/supabase';
 import { isOwebModeEnabled } from '@/lib/oweb/config';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+function hashToken(token: string): string {
+  return createHash('sha256').update(token).digest('hex');
+}
+
 /**
- * Accepts a short-lived launch token from OWeb App Store SSO.
- * Token payload is verified via service-role lookup of ao_platform / future
- * ecosystem launch table. For v1 beta we accept `?access_token=` session
- * handoff when OWeb redirects with a Supabase access token + workspace_id.
+ * Accepts a short-lived launch token from OWeb App Store SSO, or a direct
+ * access_token + workspace_id handoff for same-project session transfer.
  */
 export async function POST(req: Request) {
   if (!isOwebModeEnabled()) {
@@ -17,6 +20,7 @@ export async function POST(req: Request) {
 
   const body = (await req.json().catch(() => ({}))) as {
     access_token?: string;
+    refresh_token?: string;
     workspace_id?: string;
     launch_token?: string;
   };
@@ -29,14 +33,62 @@ export async function POST(req: Request) {
         { status: 503 },
       );
     }
-    // Placeholder for Phase 2 hardened launch tokens.
-    return Response.json(
-      {
-        message:
-          'launch_token exchange not yet provisioned — use access_token + workspace_id handoff',
-      },
-      { status: 501 },
-    );
+
+    const tokenHash = hashToken(body.launch_token.trim());
+    const { data: row, error } = await admin
+      .from('ao_ecosystem_launch_tokens')
+      .select(
+        'id, app_id, org_id, user_id, access_token, refresh_token, expires_at, consumed_at',
+      )
+      .eq('token_hash', tokenHash)
+      .maybeSingle();
+
+    if (error) {
+      console.error('[oweb.sso] lookup failed', error.message);
+      return Response.json({ message: 'SSO lookup failed' }, { status: 500 });
+    }
+
+    if (!row) {
+      return Response.json({ message: 'Invalid launch token' }, { status: 401 });
+    }
+    if (row.consumed_at) {
+      return Response.json(
+        { message: 'Launch token already used' },
+        { status: 401 },
+      );
+    }
+    if (new Date(row.expires_at).getTime() < Date.now()) {
+      return Response.json(
+        { message: 'Launch token expired' },
+        { status: 401 },
+      );
+    }
+    if (row.app_id !== 'osearch') {
+      return Response.json(
+        { message: 'Launch token is not for OSearch' },
+        { status: 403 },
+      );
+    }
+
+    const { error: consumeError } = await admin
+      .from('ao_ecosystem_launch_tokens')
+      .update({ consumed_at: new Date().toISOString() })
+      .eq('id', row.id)
+      .is('consumed_at', null);
+
+    if (consumeError) {
+      console.error('[oweb.sso] consume failed', consumeError.message);
+      return Response.json({ message: 'SSO consume failed' }, { status: 500 });
+    }
+
+    return Response.json({
+      ok: true,
+      workspace_id: row.org_id,
+      access_token: row.access_token,
+      refresh_token: row.refresh_token ?? null,
+      user_id: row.user_id,
+      next: '/',
+    });
   }
 
   if (!body.access_token || !body.workspace_id) {
@@ -49,7 +101,8 @@ export async function POST(req: Request) {
   return Response.json({
     ok: true,
     workspace_id: body.workspace_id,
-    // Client stores the Supabase session; this endpoint validates shape only.
+    access_token: body.access_token,
+    refresh_token: body.refresh_token ?? null,
     next: '/',
   });
 }

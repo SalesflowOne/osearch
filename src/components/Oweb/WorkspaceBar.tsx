@@ -2,16 +2,19 @@
 
 import { useState } from 'react';
 import { useOwebAuth } from '@/lib/oweb/AuthProvider';
+import { GUEST_MAX_SEARCHES } from '@/lib/oweb/config';
 
 const WorkspaceBar = () => {
   const {
     enabled,
     loading,
     user,
+    isAnonymous,
     workspaces,
     workspaceId,
     setWorkspaceId,
     signInWithPassword,
+    signInAnonymously,
     signOut,
     billingUrl,
     owebUrl,
@@ -75,8 +78,22 @@ const WorkspaceBar = () => {
         >
           {busy ? 'Signing in…' : 'Continue'}
         </button>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={async () => {
+            setBusy(true);
+            setError(null);
+            const err = await signInAnonymously();
+            if (err) setError(err);
+            setBusy(false);
+          }}
+          className="rounded-md border border-white/15 px-2 py-1.5 text-xs text-white/75 hover:border-[#22D3EE]/40 disabled:opacity-60"
+        >
+          Try {GUEST_MAX_SEARCHES} free searches
+        </button>
         <a
-          href={`${owebUrl}/signup`}
+          href={`${owebUrl}/signup?from=osearch`}
           className="text-center text-[11px] text-white/50 hover:text-[#22D3EE]"
         >
           Create free account
@@ -90,7 +107,9 @@ const WorkspaceBar = () => {
   return (
     <div className="fixed top-3 right-3 z-50 flex items-center gap-2 rounded-xl border border-white/10 bg-[#070a10]/95 px-3 py-2 text-xs text-white/80 shadow-lg backdrop-blur">
       <img src="/osearch-mark.svg" alt="" className="h-4 w-4" />
-      {workspaces.length > 0 ? (
+      {isAnonymous ? (
+        <span className="text-white/55">Guest</span>
+      ) : workspaces.length > 0 ? (
         <select
           value={workspaceId || ''}
           onChange={(e) => setWorkspaceId(e.target.value)}
@@ -105,19 +124,28 @@ const WorkspaceBar = () => {
       ) : (
         <span className="text-white/50">No workspace</span>
       )}
-      {current && (
+      {current && !isAnonymous && (
         <span className="hidden sm:inline text-white/45">
           {current.creditsBalance} cr · {current.plan}
         </span>
       )}
-      <a
-        href={billingUrl}
-        target="_blank"
-        rel="noreferrer"
-        className="text-[#22D3EE] hover:underline"
-      >
-        Billing
-      </a>
+      {isAnonymous ? (
+        <a
+          href={`${owebUrl}/signup?from=osearch`}
+          className="text-[#22D3EE] hover:underline"
+        >
+          Upgrade
+        </a>
+      ) : (
+        <a
+          href={billingUrl}
+          target="_blank"
+          rel="noreferrer"
+          className="text-[#22D3EE] hover:underline"
+        >
+          Billing
+        </a>
+      )}
       <button
         type="button"
         onClick={() => void signOut()}

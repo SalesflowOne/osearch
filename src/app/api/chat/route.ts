@@ -13,8 +13,11 @@ import {
   assertHasCredits,
   assertSearchAllowed,
   assertWorkspaceMembership,
+  claimGuestSearch,
   creditCostForMode,
   debitSearchCredits,
+  GuestLimitError,
+  guestUpgradeUrl,
   InsufficientCreditsError,
   insertOsMessage,
   isOwebModeEnabled,
@@ -158,47 +161,83 @@ export const POST = async (req: Request) => {
         );
       }
 
-      const workspaceId = requireWorkspaceId(req);
-      if (!workspaceId) {
-        return Response.json(
-          { message: 'X-Workspace-Id header is required', code: 'workspace_required' },
-          { status: 400 },
+      userId = auth.user.id;
+      accessToken = auth.accessToken;
+
+      if (auth.user.isAnonymous) {
+        if (body.optimizationMode === 'quality' || body.files.length > 0) {
+          return Response.json(
+            {
+              message:
+                'Guest searches are limited to speed/balanced mode without uploads. Create a free OWeb account to unlock more.',
+              code: 'guest_entitlement',
+              upgradeUrl: guestUpgradeUrl(),
+            },
+            { status: 402 },
+          );
+        }
+
+        try {
+          await claimGuestSearch(auth.user.id);
+        } catch (err) {
+          if (err instanceof GuestLimitError) {
+            return Response.json(
+              {
+                message:
+                  'Guest search allowance used. Create a free OWeb account to continue.',
+                code: 'guest_limit',
+                upgradeUrl: guestUpgradeUrl(),
+              },
+              { status: 402 },
+            );
+          }
+          throw err;
+        }
+      } else {
+        const workspaceId = requireWorkspaceId(req);
+        if (!workspaceId) {
+          return Response.json(
+            {
+              message: 'X-Workspace-Id header is required',
+              code: 'workspace_required',
+            },
+            { status: 400 },
+          );
+        }
+
+        const workspace = await assertWorkspaceMembership(
+          auth.user.id,
+          workspaceId,
         );
-      }
+        if (!workspace) {
+          return Response.json(
+            { message: 'Not a member of this workspace', code: 'forbidden' },
+            { status: 403 },
+          );
+        }
 
-      const workspace = await assertWorkspaceMembership(
-        auth.user.id,
-        workspaceId,
-      );
-      if (!workspace) {
-        return Response.json(
-          { message: 'Not a member of this workspace', code: 'forbidden' },
-          { status: 403 },
+        const entitlement = assertSearchAllowed({
+          workspace,
+          mode: body.optimizationMode as OptimizationMode,
+          hasFiles: body.files.length > 0,
+        });
+        if (!entitlement.ok) {
+          return Response.json(
+            {
+              message: entitlement.reason || 'Plan does not allow this search',
+              code: 'entitlement',
+              upgradeUrl: entitlement.upgradeUrl,
+              packageSlug: entitlement.packageSlug,
+            },
+            { status: 402 },
+          );
+        }
+
+        creditCost = creditCostForMode(
+          body.optimizationMode as OptimizationMode,
+          { hasFiles: body.files.length > 0 },
         );
-      }
 
-      const entitlement = assertSearchAllowed({
-        workspace,
-        mode: body.optimizationMode as OptimizationMode,
-        hasFiles: body.files.length > 0,
-      });
-      if (!entitlement.ok) {
-        return Response.json(
-          {
-            message: entitlement.reason || 'Plan does not allow this search',
-            code: 'entitlement',
-            upgradeUrl: entitlement.upgradeUrl,
-            packageSlug: entitlement.packageSlug,
-          },
-          { status: 402 },
-        );
-      }
-
-      creditCost = creditCostForMode(body.optimizationMode as OptimizationMode, {
-        hasFiles: body.files.length > 0,
-      });
-
-      if (!auth.user.isAnonymous) {
         try {
           await assertHasCredits(workspace.id, creditCost);
           await debitSearchCredits({
@@ -222,11 +261,9 @@ export const POST = async (req: Request) => {
           }
           throw err;
         }
-      }
 
-      orgId = workspace.id;
-      userId = auth.user.id;
-      accessToken = auth.accessToken;
+        orgId = workspace.id;
+      }
     }
 
     const registry = new ModelRegistry();
@@ -329,13 +366,15 @@ export const POST = async (req: Request) => {
       },
     });
 
-    // Local SQLite path (self-host). Constellation mode also writes os_* below.
-    ensureChatExists({
-      id: body.message.chatId,
-      sources: body.sources as SearchSources[],
-      fileIds: body.files,
-      query: body.message.content,
-    });
+    // Local SQLite only for self-host. Constellation (OWeb) mode is Postgres-only.
+    if (!owebMode) {
+      ensureChatExists({
+        id: body.message.chatId,
+        sources: body.sources as SearchSources[],
+        fileIds: body.files,
+        query: body.message.content,
+      });
+    }
 
     if (owebMode && orgId && userId) {
       const files = body.files.map((id) => ({

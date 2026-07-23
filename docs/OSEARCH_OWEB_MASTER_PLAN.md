@@ -1,8 +1,9 @@
 # OSearch → OWeb Constellation — Master Plan
 
-> **Status:** Phases 0–5 in progress (implementation started 2026-07-23)  
+> **Status:** Phases 0–5 implemented; SSO launch tokens + guest ledger hardened  
 > **OWeb catalog PR:** https://github.com/SalesflowOne/OWeb-Intelligence/pull/247  
-> **DB:** `os_*` tables applied on `ebjzdcnphkfpxfldnatm` (`osearch_os_tables`)  
+> **osearch PR:** https://github.com/SalesflowOne/osearch/pull/1  
+> **DB:** `os_*` + `ao_ecosystem_launch_tokens` on `ebjzdcnphkfpxfldnatm`  
 > **Repos:** `SalesflowOne/osearch` (this repo — Vane fork)  
 > **Control plane:** `SalesflowOne/OWeb-Intelligence` · Lovable `7186f297-568b-4b5d-8660-dcc463f6cb3d` · `https://oweb.one`  
 > **Shared DB:** Supabase `ebjzdcnphkfpxfldnatm` (“One OS”, `us-east-1`)  

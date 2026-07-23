@@ -19,10 +19,12 @@ type AuthState = {
   loading: boolean;
   session: Session | null;
   user: User | null;
+  isAnonymous: boolean;
   workspaces: OwebWorkspace[];
   workspaceId: string | null;
   setWorkspaceId: (id: string) => void;
   signInWithPassword: (email: string, password: string) => Promise<string | null>;
+  signInAnonymously: () => Promise<string | null>;
   signOut: () => Promise<void>;
   refreshWorkspaces: () => Promise<void>;
   accessToken: string | null;
@@ -124,6 +126,13 @@ export function OwebAuthProvider({ children }: { children: ReactNode }) {
     [],
   );
 
+  const signInAnonymously = useCallback(async () => {
+    const supabase = createBrowserSupabase();
+    if (!supabase) return 'Supabase is not configured';
+    const { error } = await supabase.auth.signInAnonymously();
+    return error?.message ?? null;
+  }, []);
+
   const signOut = useCallback(async () => {
     const supabase = createBrowserSupabase();
     await supabase?.auth.signOut();
@@ -131,16 +140,22 @@ export function OwebAuthProvider({ children }: { children: ReactNode }) {
     setWorkspaceIdState(null);
   }, []);
 
+  const isAnonymous =
+    Boolean((user as { is_anonymous?: boolean } | null)?.is_anonymous) ||
+    user?.app_metadata?.provider === 'anonymous';
+
   const value = useMemo<AuthState>(
     () => ({
       enabled,
       loading,
       session,
       user,
+      isAnonymous,
       workspaces,
       workspaceId,
       setWorkspaceId,
       signInWithPassword,
+      signInAnonymously,
       signOut,
       refreshWorkspaces,
       accessToken: session?.access_token ?? null,
@@ -152,10 +167,12 @@ export function OwebAuthProvider({ children }: { children: ReactNode }) {
       loading,
       session,
       user,
+      isAnonymous,
       workspaces,
       workspaceId,
       setWorkspaceId,
       signInWithPassword,
+      signInAnonymously,
       signOut,
       refreshWorkspaces,
     ],
