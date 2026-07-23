@@ -1,7 +1,16 @@
 import clsx, { ClassValue } from 'clsx';
+import fs from 'node:fs';
+import path from 'node:path';
 import { twMerge } from 'tailwind-merge';
 
 export const cn = (...classes: ClassValue[]) => twMerge(clsx(...classes));
+
+export const getDataDir = () => process.env.DATA_DIR || process.cwd();
+
+export const ensureDataDir = (dataDir = getDataDir()) => {
+  fs.mkdirSync(path.join(dataDir, 'data'), { recursive: true });
+  return dataDir;
+};
 
 export const formatTimeDifference = (
   date1: Date | string,

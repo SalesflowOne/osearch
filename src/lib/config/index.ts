@@ -1,14 +1,12 @@
 import path from 'node:path';
 import fs from 'fs';
 import { Config, ConfigModelProvider, UIConfigSections } from './types';
+import { ensureDataDir, getDataDir } from '../utils';
 import { hashObj } from '../utils/hash';
 import { getModelProvidersUIConfigSection } from '../models/providers';
 
 class ConfigManager {
-  configPath: string = path.join(
-    process.env.DATA_DIR || process.cwd(),
-    '/data/config.json',
-  );
+  configPath: string = path.join(getDataDir(), 'data', 'config.json');
   configVersion = 1;
   currentConfig: Config = {
     version: this.configVersion,
@@ -126,6 +124,7 @@ class ConfigManager {
   }
 
   private saveConfig() {
+    ensureDataDir();
     fs.writeFileSync(
       this.configPath,
       JSON.stringify(this.currentConfig, null, 2),
@@ -133,6 +132,7 @@ class ConfigManager {
   }
 
   private initializeConfig() {
+    ensureDataDir();
     const exists = fs.existsSync(this.configPath);
     if (!exists) {
       fs.writeFileSync(
