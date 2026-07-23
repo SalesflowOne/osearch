@@ -1,7 +1,7 @@
 import Database from 'better-sqlite3';
 import path from 'path';
 import fs from 'fs';
-import { ensureDataDir, getDataDir } from '../utils';
+import { ensureDataDir } from '../server/dataDir';
 
 const DATA_DIR = ensureDataDir();
 const dbPath = path.join(DATA_DIR, 'data', 'db.sqlite');
