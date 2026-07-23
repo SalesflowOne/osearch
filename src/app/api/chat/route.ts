@@ -9,6 +9,23 @@ import db from '@/lib/db';
 import { eq } from 'drizzle-orm';
 import { chats } from '@/lib/db/schema';
 import UploadManager from '@/lib/uploads/manager';
+import {
+  assertHasCredits,
+  assertSearchAllowed,
+  assertWorkspaceMembership,
+  claimGuestSearch,
+  creditCostForMode,
+  debitSearchCredits,
+  GuestLimitError,
+  guestUpgradeUrl,
+  InsufficientCreditsError,
+  insertOsMessage,
+  isOwebModeEnabled,
+  requireWorkspaceId,
+  resolveAuthFromRequest,
+  upsertOsChat,
+  type OptimizationMode,
+} from '@/lib/oweb';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -125,6 +142,130 @@ export const POST = async (req: Request) => {
       );
     }
 
+    const owebMode = isOwebModeEnabled();
+    let orgId: string | null = null;
+    let userId: string | null = null;
+    let accessToken: string | null = null;
+    let creditCost = 0;
+
+    if (owebMode) {
+      const auth = await resolveAuthFromRequest(req);
+      if (!auth) {
+        return Response.json(
+          {
+            message: 'Sign in with OWeb to search',
+            code: 'auth_required',
+            upgradeUrl: 'https://oweb.one/signup',
+          },
+          { status: 401 },
+        );
+      }
+
+      userId = auth.user.id;
+      accessToken = auth.accessToken;
+
+      if (auth.user.isAnonymous) {
+        if (body.optimizationMode === 'quality' || body.files.length > 0) {
+          return Response.json(
+            {
+              message:
+                'Guest searches are limited to speed/balanced mode without uploads. Create a free OWeb account to unlock more.',
+              code: 'guest_entitlement',
+              upgradeUrl: guestUpgradeUrl(),
+            },
+            { status: 402 },
+          );
+        }
+
+        try {
+          await claimGuestSearch(auth.user.id);
+        } catch (err) {
+          if (err instanceof GuestLimitError) {
+            return Response.json(
+              {
+                message:
+                  'Guest search allowance used. Create a free OWeb account to continue.',
+                code: 'guest_limit',
+                upgradeUrl: guestUpgradeUrl(),
+              },
+              { status: 402 },
+            );
+          }
+          throw err;
+        }
+      } else {
+        const workspaceId = requireWorkspaceId(req);
+        if (!workspaceId) {
+          return Response.json(
+            {
+              message: 'X-Workspace-Id header is required',
+              code: 'workspace_required',
+            },
+            { status: 400 },
+          );
+        }
+
+        const workspace = await assertWorkspaceMembership(
+          auth.user.id,
+          workspaceId,
+        );
+        if (!workspace) {
+          return Response.json(
+            { message: 'Not a member of this workspace', code: 'forbidden' },
+            { status: 403 },
+          );
+        }
+
+        const entitlement = assertSearchAllowed({
+          workspace,
+          mode: body.optimizationMode as OptimizationMode,
+          hasFiles: body.files.length > 0,
+        });
+        if (!entitlement.ok) {
+          return Response.json(
+            {
+              message: entitlement.reason || 'Plan does not allow this search',
+              code: 'entitlement',
+              upgradeUrl: entitlement.upgradeUrl,
+              packageSlug: entitlement.packageSlug,
+            },
+            { status: 402 },
+          );
+        }
+
+        creditCost = creditCostForMode(
+          body.optimizationMode as OptimizationMode,
+          { hasFiles: body.files.length > 0 },
+        );
+
+        try {
+          await assertHasCredits(workspace.id, creditCost);
+          await debitSearchCredits({
+            orgId: workspace.id,
+            amount: creditCost,
+            messageId: message.messageId,
+            mode: body.optimizationMode as OptimizationMode,
+            actorUserId: auth.user.id,
+            model: `${body.chatModel.providerId}/${body.chatModel.key}`,
+          });
+        } catch (err) {
+          if (err instanceof InsufficientCreditsError) {
+            return Response.json(
+              {
+                message: 'Insufficient OneCredits',
+                code: 'insufficient_credits',
+                upgradeUrl: entitlement.upgradeUrl,
+              },
+              { status: 402 },
+            );
+          }
+          throw err;
+        }
+
+        orgId = workspace.id;
+      }
+    }
+
     const registry = new ModelRegistry();
 
     const [llm, embedding] = await Promise.all([
@@ -225,12 +366,43 @@ export const POST = async (req: Request) => {
       },
     });
 
-    ensureChatExists({
-      id: body.message.chatId,
-      sources: body.sources as SearchSources[],
-      fileIds: body.files,
-      query: body.message.content,
-    });
+    // Local SQLite only for self-host. Constellation (OWeb) mode is Postgres-only.
+    if (!owebMode) {
+      ensureChatExists({
+        id: body.message.chatId,
+        sources: body.sources as SearchSources[],
+        fileIds: body.files,
+        query: body.message.content,
+      });
+    }
+
+    if (owebMode && orgId && userId) {
+      const files = body.files.map((id) => ({
+        fileId: id,
+        name: UploadManager.getFile(id)?.name || 'Uploaded File',
+      }));
+      void upsertOsChat({
+        accessToken,
+        id: body.message.chatId,
+        orgId,
+        userId,
+        title: message.content.slice(0, 120),
+        sources: body.sources as SearchSources[],
+        files,
+        optimizationMode: body.optimizationMode,
+      });
+      void insertOsMessage({
+        accessToken,
+        chatId: body.message.chatId,
+        orgId,
+        userId,
+        messageId: message.messageId,
+        query: message.content,
+        status: 'answering',
+        model: `${body.chatModel.providerId}/${body.chatModel.key}`,
+        creditsUsed: creditCost,
+      });
+    }
 
     req.signal.addEventListener('abort', () => {
       disconnect();

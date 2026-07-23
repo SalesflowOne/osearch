@@ -2,9 +2,10 @@ import type { MetadataRoute } from 'next';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Vane - Direct Your Curiosity',
-    short_name: 'Vane',
-    description: 'Vane is an AI powered answering engine.',
+    name: 'OSearch — Cited answers from the open web',
+    short_name: 'OSearch',
+    description:
+      'OWeb’s search app with research agents, citations, and OneCredits.',
     start_url: '/',
     display: 'standalone',
     background_color: '#0a0a0a',

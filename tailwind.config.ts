@@ -24,6 +24,10 @@ const config: Config = {
   darkMode: 'class',
   theme: {
     extend: {
+      fontFamily: {
+        display: ['var(--font-display)', 'Nunito', 'sans-serif'],
+        sans: ['var(--font-sans)', 'Plus Jakarta Sans', 'sans-serif'],
+      },
       borderColor: ({ colors }) => {
         return {
           light: themeLight(colors),
@@ -35,6 +39,8 @@ const config: Config = {
         const colorsLight = themeLight(colors);
 
         return {
+          live: '#22D3EE',
+          void: '#050709',
           dark: {
             primary: colorsDark[50],
             secondary: colorsDark[100],

@@ -742,11 +742,27 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
     const messageIndex = messages.findIndex((m) => m.messageId === messageId);
 
+    const owebHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    try {
+      const workspaceId = localStorage.getItem('osearch.workspaceId');
+      if (workspaceId) owebHeaders['X-Workspace-Id'] = workspaceId;
+      const { createBrowserSupabase } = await import('@/lib/oweb/supabase');
+      const supabase = createBrowserSupabase();
+      const session = supabase
+        ? (await supabase.auth.getSession()).data.session
+        : null;
+      if (session?.access_token) {
+        owebHeaders.Authorization = `Bearer ${session.access_token}`;
+      }
+    } catch {
+      /* self-host / no oweb */
+    }
+
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: owebHeaders,
       body: JSON.stringify({
         content: message,
         message: {
@@ -775,6 +791,25 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         systemInstructions: localStorage.getItem('systemInstructions'),
       }),
     });
+
+    if (res.status === 401 || res.status === 402 || res.status === 403) {
+      const errBody = await res.json().catch(() => ({}));
+      const msg =
+        errBody.message ||
+        (res.status === 401
+          ? 'Sign in with OWeb to search'
+          : 'Upgrade required');
+      toast.error(msg, {
+        action: errBody.upgradeUrl
+          ? {
+              label: 'Open billing',
+              onClick: () => window.open(errBody.upgradeUrl, '_blank'),
+            }
+          : undefined,
+      });
+      setLoading(false);
+      return;
+    }
 
     if (!res.body) throw new Error('No response body');
 

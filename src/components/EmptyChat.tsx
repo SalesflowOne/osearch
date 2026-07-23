@@ -46,11 +46,27 @@ const EmptyChat = () => {
       <div className="absolute w-full flex flex-row items-center justify-end mr-5 mt-5">
         <SettingsButtonMobile />
       </div>
-      <div className="flex flex-col items-center justify-center min-h-screen max-w-screen-sm mx-auto p-2 space-y-4">
-        <div className="flex flex-col items-center justify-center w-full space-y-8">
-          <h2 className="text-black/70 dark:text-white/70 text-3xl font-medium -mt-8">
-            Research begins here.
+      <div className="relative flex flex-col items-center justify-center min-h-screen max-w-screen-sm mx-auto p-2 space-y-4">
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-x-0 bottom-1/4 h-64 opacity-70 blur-3xl"
+          style={{
+            background:
+              'radial-gradient(ellipse at center, rgba(34,211,238,0.28), rgba(139,92,246,0.18), transparent 70%)',
+          }}
+        />
+        <div className="relative flex flex-col items-center justify-center w-full space-y-8">
+          <img
+            src="/osearch-mark.svg"
+            alt="OSearch"
+            className="h-16 w-16 drop-shadow-[0_0_24px_rgba(34,211,238,0.45)] motion-safe:animate-pulse"
+          />
+          <h2 className="font-display text-3xl font-bold tracking-tight text-black/80 dark:text-white/90 -mt-2">
+            Ask the web.
           </h2>
+          <p className="text-sm text-black/50 dark:text-white/45 -mt-4">
+            Cited answers · same OWeb identity &amp; credits
+          </p>
           <EmptyChatMessageInput />
         </div>
         {(showWeather || showNews) && (
