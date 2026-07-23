@@ -4,6 +4,7 @@ import { Config, ConfigModelProvider, UIConfigSections } from './types';
 import { ensureDataDir, getDataDir } from '../server/dataDir';
 import {
   AI_GATEWAY_BASE_URL,
+  getAiGatewayApiKey,
   isAiGatewayEnabled,
   isSetupCompleteFromEnv,
 } from '../server/setupEnv';
@@ -244,7 +245,7 @@ class ConfigManager {
   }
 
   private initializeAiGatewayProvider() {
-    const apiKey = process.env.AI_GATEWAY_API_KEY;
+    const apiKey = getAiGatewayApiKey();
     if (!apiKey || !isAiGatewayEnabled()) {
       return;
     }

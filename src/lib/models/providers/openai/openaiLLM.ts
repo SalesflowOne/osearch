@@ -1,5 +1,6 @@
 import OpenAI from 'openai';
 import BaseLLM from '../../base/llm';
+import { getAiGatewayApiKey } from '@/lib/server/setupEnv';
 import { zodTextFormat, zodResponseFormat } from 'openai/helpers/zod';
 import {
   GenerateObjectInput,
@@ -33,9 +34,15 @@ class OpenAILLM extends BaseLLM<OpenAIConfig> {
   constructor(protected config: OpenAIConfig) {
     super(config);
 
+    const baseURL = this.config.baseURL || 'https://api.openai.com/v1';
+    const apiKey =
+      baseURL.includes('ai-gateway.vercel.sh')
+        ? getAiGatewayApiKey() || this.config.apiKey
+        : this.config.apiKey;
+
     this.openAIClient = new OpenAI({
-      apiKey: this.config.apiKey,
-      baseURL: this.config.baseURL || 'https://api.openai.com/v1',
+      apiKey,
+      baseURL,
     });
   }
 
