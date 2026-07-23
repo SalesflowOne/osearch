@@ -1,5 +1,6 @@
 import { UIConfigField } from '@/lib/config/types';
 import { getConfiguredModelProviderById } from '@/lib/config/serverRegistry';
+import { AI_GATEWAY_BASE_URL } from '@/lib/server/setupEnv';
 import { Model, ModelList, ProviderMetadata } from '../../types';
 import OpenAIEmbedding from './openaiEmbedding';
 import BaseEmbedding from '../../base/embedding';
@@ -106,6 +107,36 @@ const defaultEmbeddingModels: Model[] = [
   },
 ];
 
+const defaultGatewayChatModels: Model[] = [
+  {
+    name: 'GPT-4o mini',
+    key: 'openai/gpt-4o-mini',
+  },
+  {
+    name: 'GPT-4o',
+    key: 'openai/gpt-4o',
+  },
+  {
+    name: 'GPT-4.1',
+    key: 'openai/gpt-4.1',
+  },
+  {
+    name: 'Claude Sonnet 4',
+    key: 'anthropic/claude-sonnet-4',
+  },
+];
+
+const defaultGatewayEmbeddingModels: Model[] = [
+  {
+    name: 'Text Embedding 3 Small',
+    key: 'openai/text-embedding-3-small',
+  },
+  {
+    name: 'Text Embedding 3 Large',
+    key: 'openai/text-embedding-3-large',
+  },
+];
+
 const providerConfigFields: UIConfigField[] = [
   {
     type: 'password',
@@ -140,6 +171,16 @@ class OpenAIProvider extends BaseModelProvider<OpenAIConfig> {
       return {
         embedding: defaultEmbeddingModels,
         chat: defaultChatModels,
+      };
+    }
+
+    if (
+      this.config.baseURL === AI_GATEWAY_BASE_URL ||
+      this.config.baseURL?.includes('ai-gateway.vercel.sh')
+    ) {
+      return {
+        embedding: defaultGatewayEmbeddingModels,
+        chat: defaultGatewayChatModels,
       };
     }
 

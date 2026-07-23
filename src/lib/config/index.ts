@@ -2,6 +2,11 @@ import path from 'node:path';
 import fs from 'fs';
 import { Config, ConfigModelProvider, UIConfigSections } from './types';
 import { ensureDataDir, getDataDir } from '../server/dataDir';
+import {
+  AI_GATEWAY_BASE_URL,
+  isAiGatewayEnabled,
+  isSetupCompleteFromEnv,
+} from '../server/setupEnv';
 import { hashObj } from '../utils/hash';
 import { getModelProvidersUIConfigSection } from '../models/providers';
 
@@ -225,6 +230,7 @@ class ConfigManager {
     });
 
     this.currentConfig.modelProviders.push(...newProviders);
+    this.initializeAiGatewayProvider();
 
     /* search section */
     this.uiConfigSections.search.forEach((f) => {
@@ -235,6 +241,34 @@ class ConfigManager {
     });
 
     this.saveConfig();
+  }
+
+  private initializeAiGatewayProvider() {
+    const apiKey = process.env.AI_GATEWAY_API_KEY;
+    if (!apiKey || !isAiGatewayEnabled()) {
+      return;
+    }
+
+    const config = {
+      apiKey,
+      baseURL: process.env.OPENAI_BASE_URL || AI_GATEWAY_BASE_URL,
+    };
+    const hash = hashObj(config);
+    const exists = this.currentConfig.modelProviders.find((p) => p.hash === hash);
+
+    if (exists) {
+      return;
+    }
+
+    this.currentConfig.modelProviders.push({
+      id: crypto.randomUUID(),
+      name: 'AI Gateway',
+      type: 'openai',
+      chatModels: [],
+      embeddingModels: [],
+      config,
+      hash,
+    });
   }
 
   public getConfig(key: string, defaultValue?: any): any {
@@ -365,7 +399,7 @@ class ConfigManager {
   }
 
   public isSetupComplete() {
-    return this.currentConfig.setupComplete;
+    return isSetupCompleteFromEnv() || this.currentConfig.setupComplete;
   }
 
   public markSetupComplete() {
