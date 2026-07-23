@@ -10,6 +10,15 @@
   font-display: swap;
 }
 
+:root {
+  --live: #22d3ee;
+  --void: #050709;
+  --surface: #070a10;
+  --card: #0e131c;
+  --ow-border: #181f2b;
+  --primary-foreground: #04121a;
+}
+
 @layer base {
   .overflow-hidden-scrollable {
     -ms-overflow-style: none;

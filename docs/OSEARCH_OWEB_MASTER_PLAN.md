@@ -1,6 +1,8 @@
 # OSearch → OWeb Constellation — Master Plan
 
-> **Status:** Recommended architecture (audit complete 2026-07-23)  
+> **Status:** Phases 0–5 in progress (implementation started 2026-07-23)  
+> **OWeb catalog PR:** https://github.com/SalesflowOne/OWeb-Intelligence/pull/247  
+> **DB:** `os_*` tables applied on `ebjzdcnphkfpxfldnatm` (`osearch_os_tables`)  
 > **Repos:** `SalesflowOne/osearch` (this repo — Vane fork)  
 > **Control plane:** `SalesflowOne/OWeb-Intelligence` · Lovable `7186f297-568b-4b5d-8660-dcc463f6cb3d` · `https://oweb.one`  
 > **Shared DB:** Supabase `ebjzdcnphkfpxfldnatm` (“One OS”, `us-east-1`)  
